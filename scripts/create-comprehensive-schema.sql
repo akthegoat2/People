@@ -24,6 +24,7 @@ CREATE TABLE profiles (
   monthly_xp INTEGER DEFAULT 0,
   total_quiz_attempts INTEGER DEFAULT 0,
   average_quiz_score DECIMAL DEFAULT 0,
+  role TEXT DEFAULT 'student',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
@@ -79,11 +80,75 @@ CREATE TABLE certificates (
   instructor TEXT NOT NULL,
   institution TEXT DEFAULT 'Lagos State University',
   issued_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW') NOT NULL
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Create leaderboard view for performance
-CREATE OR REPLACE VIEW leaderboard AS
+-- Content management tables (for admin)
+CREATE TABLE IF NOT EXISTS modules (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  emoji TEXT NOT NULL DEFAULT '📚',
+  difficulty TEXT NOT NULL DEFAULT 'Beginner',
+  duration TEXT NOT NULL DEFAULT '2 weeks',
+  xp_reward INTEGER NOT NULL DEFAULT 100,
+  skills TEXT[] NOT NULL DEFAULT '{}',
+  projects TEXT[] NOT NULL DEFAULT '{}',
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS lessons (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  module_id UUID REFERENCES modules(id) ON DELETE CASCADE NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  content TEXT NOT NULL,
+  code_example TEXT,
+  challenge TEXT,
+  starter_code TEXT,
+  expected_output TEXT,
+  tips TEXT,
+  type TEXT NOT NULL DEFAULT 'theory',
+  xp_reward INTEGER NOT NULL DEFAULT 25,
+  estimated_time INTEGER NOT NULL DEFAULT 30,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS quizzes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL,
+  difficulty TEXT NOT NULL DEFAULT 'Beginner',
+  time_limit INTEGER NOT NULL DEFAULT 15,
+  xp_reward INTEGER NOT NULL DEFAULT 50,
+  category TEXT NOT NULL DEFAULT 'javascript',
+  type TEXT NOT NULL DEFAULT 'multiple-choice',
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS questions (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  quiz_id UUID REFERENCES quizzes(id) ON DELETE CASCADE NOT NULL,
+  type TEXT NOT NULL DEFAULT 'multiple-choice',
+  question TEXT NOT NULL,
+  code TEXT,
+  options JSONB,
+  correct_answer TEXT NOT NULL,
+  explanation TEXT NOT NULL,
+  points INTEGER NOT NULL DEFAULT 10,
+  order_index INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create leaderboard view for performance (respects caller RLS)
+CREATE OR REPLACE VIEW leaderboard WITH (security_invoker = true) AS
 SELECT 
   p.id,
   p.full_name,
@@ -106,23 +171,76 @@ ALTER TABLE lesson_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quiz_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE certificates ENABLE ROW LEVEL SECURITY;
 
--- Create RLS policies
+-- Create RLS policies (drop first for idempotency)
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
 CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can view own lesson progress" ON lesson_progress;
+DROP POLICY IF EXISTS "Users can insert own lesson progress" ON lesson_progress;
+DROP POLICY IF EXISTS "Users can update own lesson progress" ON lesson_progress;
 CREATE POLICY "Users can view own lesson progress" ON lesson_progress FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own lesson progress" ON lesson_progress FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own lesson progress" ON lesson_progress FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can view own quiz attempts" ON quiz_attempts;
+DROP POLICY IF EXISTS "Users can insert own quiz attempts" ON quiz_attempts;
 CREATE POLICY "Users can view own quiz attempts" ON quiz_attempts FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own quiz attempts" ON quiz_attempts FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can view own certificates" ON certificates;
+DROP POLICY IF EXISTS "Users can insert own certificates" ON certificates;
 CREATE POLICY "Users can view own certificates" ON certificates FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert own certificates" ON certificates FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Allow users to view leaderboard (public data)
+DROP POLICY IF EXISTS "Anyone can view leaderboard" ON profiles;
 CREATE POLICY "Anyone can view leaderboard" ON profiles FOR SELECT USING (true);
+
+-- Enable RLS for content tables
+ALTER TABLE modules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lessons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quizzes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
+
+-- Content table policies: all authenticated users can read, only admins can write
+DROP POLICY IF EXISTS "Anyone can read modules" ON modules;
+DROP POLICY IF EXISTS "Admins can insert modules" ON modules;
+DROP POLICY IF EXISTS "Admins can update modules" ON modules;
+DROP POLICY IF EXISTS "Admins can delete modules" ON modules;
+CREATE POLICY "Anyone can read modules" ON modules FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admins can insert modules" ON modules FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can update modules" ON modules FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can delete modules" ON modules FOR DELETE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+
+DROP POLICY IF EXISTS "Anyone can read lessons" ON lessons;
+DROP POLICY IF EXISTS "Admins can insert lessons" ON lessons;
+DROP POLICY IF EXISTS "Admins can update lessons" ON lessons;
+DROP POLICY IF EXISTS "Admins can delete lessons" ON lessons;
+CREATE POLICY "Anyone can read lessons" ON lessons FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admins can insert lessons" ON lessons FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can update lessons" ON lessons FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can delete lessons" ON lessons FOR DELETE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+
+DROP POLICY IF EXISTS "Anyone can read quizzes" ON quizzes;
+DROP POLICY IF EXISTS "Admins can insert quizzes" ON quizzes;
+DROP POLICY IF EXISTS "Admins can update quizzes" ON quizzes;
+DROP POLICY IF EXISTS "Admins can delete quizzes" ON quizzes;
+CREATE POLICY "Anyone can read quizzes" ON quizzes FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admins can insert quizzes" ON quizzes FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can update quizzes" ON quizzes FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can delete quizzes" ON quizzes FOR DELETE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+
+DROP POLICY IF EXISTS "Anyone can read questions" ON questions;
+DROP POLICY IF EXISTS "Admins can insert questions" ON questions;
+DROP POLICY IF EXISTS "Admins can update questions" ON questions;
+DROP POLICY IF EXISTS "Admins can delete questions" ON questions;
+CREATE POLICY "Anyone can read questions" ON questions FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Admins can insert questions" ON questions FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can update questions" ON questions FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can delete questions" ON questions FOR DELETE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
 -- Function to handle new user registration
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -150,7 +268,7 @@ BEGIN
     NEW.raw_user_meta_data->>'avatar_url',
     0, -- Start with 0 XP
     1, -- Start at level 1
-    0, -- Start with 0 streak
+     1, -- Start with 1 streak
     '{}', -- Start with no badges
     0, -- Start with 0 completed lessons
     0, -- Start with 0 completed quizzes

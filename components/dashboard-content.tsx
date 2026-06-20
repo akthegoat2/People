@@ -1,33 +1,30 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Trophy, Target, BookOpen, Clock, Zap, Star, Award, TrendingUp } from "lucide-react"
-import { createClient } from "@/lib/supabase"
-import { profileService, type UserProfile } from "@/lib/profile-service"
+import { useAuth } from "@/contexts/auth-context"
+import { profileService } from "@/lib/profile-service"
 import { learningService } from "@/lib/learning-service"
 
-export function DashboardContent() {
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+export function DashboardContent({ onNavigate }: { onNavigate?: (view: string) => void }) {
+  const { user, profile } = useAuth()
   const [progress, setProgress] = useState<any>(null)
   const [leaderboard, setLeaderboard] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const [totalLessons, setTotalLessons] = useState(0)
 
   useEffect(() => {
+    if (!user) return
     const fetchDashboardData = async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-        if (!user) return
-
-        // Fetch user profile
-        const userProfile = await profileService.getProfile(user.id)
-        setProfile(userProfile)
+        // Fetch modules to count total lessons
+        const allModules = await learningService.getModules()
+        const total = allModules.reduce((acc, m) => acc + m.lessons.length, 0)
+        setTotalLessons(total)
 
         // Fetch user progress
         const userProgress = await learningService.getUserProgress(user.id)
@@ -41,7 +38,7 @@ export function DashboardContent() {
         await profileService.updateStreak(user.id)
 
         // Award welcome badge if it's a new user
-        if (userProfile && userProfile.badges.length === 0) {
+        if (profile && profile.badges.length === 0) {
           await learningService.awardBadge(user.id, "Welcome")
         }
       } catch (error) {
@@ -52,28 +49,14 @@ export function DashboardContent() {
     }
 
     fetchDashboardData()
-  }, [])
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center space-y-4">
-          <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto animate-pulse">
-            🎓
-          </div>
-          <div className="text-lg font-semibold text-gray-700">Loading your progress...</div>
-        </div>
-      </div>
-    )
-  }
+  }, [user])
 
   // Calculate progress percentages
-  const totalModules = learningService.getModules().length
-  const completedModules = progress?.lessons?.filter((l: any) => l.completed).length || 0
-  const moduleProgress = totalModules > 0 ? (completedModules / totalModules) * 100 : 0
+  const completedLessons = progress?.lessons?.filter((l: any) => l.completed).length || 0
+  const lessonProgress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0
 
   // Badge system
-  const badges = [
+  const badges = useMemo(() => [
     {
       name: "Welcome",
       emoji: "👋",
@@ -110,7 +93,16 @@ export function DashboardContent() {
       earned: (profile?.level || 1) >= 3,
       description: "Reach level 3",
     },
-  ]
+  ], [profile])
+
+  // Calculate weekly XP from recent quiz attempts
+  const now = Date.now()
+  const weekAgo = new Date(now - 7 * 86400000).toISOString()
+  const weeklyXP = progress?.quizzes
+    ? progress.quizzes
+        .filter((q: any) => q.created_at >= weekAgo)
+        .reduce((sum: number, q: any) => sum + (q.xp_earned || 0), 0)
+    : 0
 
   // Calculate average quiz score from progress data
   const averageQuizScore =
@@ -119,7 +111,7 @@ export function DashboardContent() {
       : 0
 
   // Recent activity from real data
-  const recentActivity = [
+  const recentActivity = useMemo(() => [
     ...(progress?.lessons?.slice(0, 3).map((lesson: any) => ({
       title: lesson.lesson_title,
       type: lesson.completed ? "completed" : "in-progress",
@@ -134,7 +126,20 @@ export function DashboardContent() {
       time: new Date(quiz.completed_at).toLocaleDateString(),
       emoji: "🧠",
     })) || []),
-  ]
+  ], [progress])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto animate-pulse">
+            🎓
+          </div>
+          <div className="text-lg font-semibold text-gray-700">Loading your progress...</div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -177,8 +182,8 @@ export function DashboardContent() {
             <div className="text-2xl font-bold text-green-800">{profile?.completed_lessons || 0}</div>
             <p className="text-xs text-green-600">Keep learning! 🚀</p>
             <div className="mt-2">
-              <Progress value={moduleProgress} className="h-1 bg-green-200" />
-              <p className="text-xs text-green-500 mt-1">{Math.round(moduleProgress)}% module progress</p>
+              <Progress value={lessonProgress} className="h-1 bg-green-200" />
+              <p className="text-xs text-green-500 mt-1">{Math.round(lessonProgress)}% lesson progress</p>
             </div>
           </CardContent>
         </Card>
@@ -262,18 +267,26 @@ export function DashboardContent() {
                       <TrendingUp className="h-5 w-5 text-green-600" />
                       <span className="font-semibold text-green-800">This Week</span>
                     </div>
-                    <div className="text-2xl font-bold text-green-700">{progress?.weekly_xp ? progress.weekly_xp : 0} XP</div>
+                    <div className="text-2xl font-bold text-green-700">{weeklyXP} XP</div>
                     <div className="text-sm text-green-600">Weekly progress</div>
+                  </div>
+                  <div className="p-4 bg-white rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Target className="h-5 w-5 text-green-600" />
+                      <span className="font-semibold text-green-800">Average Score</span>
+                    </div>
                     <div className="text-2xl font-bold text-green-700">
                       {Math.round(averageQuizScore)}%
                     </div>
                     <div className="text-sm text-green-600">Quiz performance</div>
-                    <span className="font-semibold text-green-800">Average Score</span>
                   </div>
                 </div>
               </>
             )}
-            <Button className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700">
+            <Button
+              onClick={() => onNavigate?.("modules")}
+              className="w-full bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700"
+            >
               {profile?.completed_lessons === 0 ? "Start Learning Journey 🎓" : "Continue Learning 📚"}
             </Button>
           </div>
@@ -292,7 +305,7 @@ export function DashboardContent() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {badges.map((badge, index) => (
               <div
                 key={index}

@@ -9,9 +9,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Clock, CheckCircle, X, Trophy, Star, Target } from "lucide-react"
-import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/contexts/auth-context"
 import { learningService, type Quiz, type QuizQuestion } from "@/lib/learning-service"
-import { profileService } from "@/lib/profile-service"
 
 interface QuizViewerProps {
   quizId: string
@@ -28,12 +27,12 @@ export function QuizViewer({ quizId, onBack, onComplete }: QuizViewerProps) {
   const [results, setResults] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [startTime] = useState(Date.now())
-  const supabase = createClient()
+  const { user, awardXP, updateStreak, refreshProfile } = useAuth()
 
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
-        const quizData = learningService.getQuiz(quizId)
+        const quizData = await learningService.getQuiz(quizId)
         if (quizData) {
           setQuiz(quizData)
           setTimeLeft(quizData.timeLimit * 60) // Convert minutes to seconds
@@ -72,35 +71,32 @@ export function QuizViewer({ quizId, onBack, onComplete }: QuizViewerProps) {
   }
 
   const handleSubmitQuiz = async () => {
-    if (!quiz) return
+    if (!quiz || !user) return
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const timeTaken = Math.floor((Date.now() - startTime) / 1000 / 60) // in minutes
+      const result = await learningService.submitQuizAttempt(user.id, quizId, answers, timeTaken)
 
-      if (user) {
-        const timeTaken = Math.floor((Date.now() - startTime) / 1000 / 60) // in minutes
-        const result = await learningService.submitQuizAttempt(user.id, quizId, answers, timeTaken)
+      setResults(result)
+      setIsSubmitted(true)
 
-        setResults(result)
-        setIsSubmitted(true)
+      // Award XP to user profile
+      if (result.success && result.xpEarned > 0) {
+        await awardXP(result.xpEarned)
 
-        // Award XP to user profile
-        if (result.success && result.xpEarned > 0) {
-          await profileService.awardXP(user.id, result.xpEarned)
-
-          // Award badges based on performance
-          if (result.percentage === 100) {
-            await learningService.awardBadge(user.id, "Perfect Score")
-          }
-          if (result.percentage >= 80) {
-            await learningService.awardBadge(user.id, "Quiz Master")
-          }
-
-          // Update streak
-          await profileService.updateStreak(user.id)
+        // Award badges based on performance
+        if (result.percentage === 100) {
+          await learningService.awardBadge(user.id, "Perfect Score")
         }
+        if (result.percentage >= 80) {
+          await learningService.awardBadge(user.id, "Quiz Master")
+        }
+
+        // Update streak
+        await updateStreak()
+
+        // Refresh profile to sync dashboard
+        await refreshProfile()
       }
     } catch (error) {
       console.error("Error submitting quiz:", error)
@@ -301,18 +297,18 @@ export function QuizViewer({ quizId, onBack, onComplete }: QuizViewerProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onBack} className="hover:bg-gray-100">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-4 w-full sm:w-auto">
+          <Button variant="ghost" onClick={onBack} className="hover:bg-gray-100 shrink-0">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Quizzes
+            <span className="hidden sm:inline">Back to Quizzes</span>
           </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{quiz.title}</h1>
-            <p className="text-gray-600">{quiz.description}</p>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-sidebar-foreground truncate">{quiz.title}</h1>
+            <p className="text-muted-foreground text-sm hidden sm:block">{quiz.description}</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 shrink-0">
           <Badge className="bg-gradient-to-r from-red-100 to-pink-100 text-red-700 border-red-200">
             <Clock className="h-4 w-4 mr-1" />
             {formatTime(timeLeft)}
@@ -338,8 +334,8 @@ export function QuizViewer({ quizId, onBack, onComplete }: QuizViewerProps) {
       </Card>
 
       {/* Question */}
-      <Card className="min-h-[500px]">
-        <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b">
+      <Card className="min-h-[300px] md:min-h-[500px] flex flex-col">
+        <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 border-b shrink-0">
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-purple-600" />
             Question {currentQuestion + 1}
@@ -348,7 +344,7 @@ export function QuizViewer({ quizId, onBack, onComplete }: QuizViewerProps) {
             </Badge>
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="p-6 flex-1 min-h-0 overflow-y-auto">
           <div className="space-y-6">
             <h3 className="text-lg font-semibold text-gray-900">{currentQ.question}</h3>
 
@@ -416,16 +412,17 @@ export function QuizViewer({ quizId, onBack, onComplete }: QuizViewerProps) {
       {/* Navigation */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <Button
               variant="outline"
               onClick={() => setCurrentQuestion(Math.max(0, currentQuestion - 1))}
               disabled={currentQuestion === 0}
+              className="shrink-0"
             >
               Previous
             </Button>
 
-            <div className="flex items-center gap-2">
+            <div className="items-center gap-2 hidden sm:flex">
               {quiz.questions.map((_, index) => (
                 <div
                   key={index}
@@ -445,7 +442,7 @@ export function QuizViewer({ quizId, onBack, onComplete }: QuizViewerProps) {
             {currentQuestion === quiz.questions.length - 1 ? (
               <Button
                 onClick={handleSubmitQuiz}
-                className="bg-green-600 hover:bg-green-700"
+                className="bg-green-600 hover:bg-green-700 shrink-0"
                 disabled={!answers[currentQ.id]}
               >
                 Submit Quiz
@@ -454,7 +451,7 @@ export function QuizViewer({ quizId, onBack, onComplete }: QuizViewerProps) {
               <Button
                 onClick={() => setCurrentQuestion(Math.min(quiz.questions.length - 1, currentQuestion + 1))}
                 disabled={!answers[currentQ.id]}
-                className="bg-blue-600 hover:bg-blue-700"
+                className="bg-blue-600 hover:bg-blue-700 shrink-0"
               >
                 Next
               </Button>

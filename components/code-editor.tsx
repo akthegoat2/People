@@ -1,10 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Play, RotateCcw, Copy, Check } from "lucide-react"
+import { Play, RotateCcw, Copy, Check, ChevronDown, Sun, Moon } from "lucide-react"
+
+const LANGUAGES = ["javascript", "html", "css", "typescript", "python"] as const
 
 interface CodeEditorProps {
   initialCode?: string
@@ -17,8 +19,8 @@ interface CodeEditorProps {
 
 export function CodeEditor({
   initialCode = "",
-  language = "javascript",
-  theme = "dark",
+  language: initialLanguage = "javascript",
+  theme: initialTheme = "dark",
   readOnly = false,
   onCodeChange,
   onRun,
@@ -27,10 +29,24 @@ export function CodeEditor({
   const [output, setOutput] = useState("")
   const [isRunning, setIsRunning] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [currentTheme, setCurrentTheme] = useState<"light" | "dark">(initialTheme)
+  const [currentLanguage, setCurrentLanguage] = useState(initialLanguage)
+  const [langOpen, setLangOpen] = useState(false)
+  const langRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setCode(initialCode)
   }, [initialCode])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (langRef.current && !langRef.current.contains(e.target as Node)) {
+        setLangOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   const handleCodeChange = (newCode: string) => {
     setCode(newCode)
@@ -42,31 +58,25 @@ export function CodeEditor({
     setOutput("")
 
     try {
-      // Simple JavaScript execution for demo purposes
-      // In a real implementation, you'd want to use a sandboxed environment
-      if (language === "javascript") {
-        // Capture console.log output
+      if (currentLanguage === "javascript") {
         const logs: string[] = []
-        const originalLog = console.log
-        console.log = (...args) => {
-          logs.push(args.map((arg) => String(arg)).join(" "))
+
+        const mockConsole = {
+          log: (...args: any[]) => logs.push(args.map((arg: any) => String(arg)).join(" ")),
+          error: (...args: any[]) => logs.push("Error: " + args.map((arg: any) => String(arg)).join(" ")),
+          warn: (...args: any[]) => logs.push("Warning: " + args.map((arg: any) => String(arg)).join(" ")),
         }
 
         try {
-          // Create a function to execute the code
-          const func = new Function(code)
-          const result = func()
-
+          const result = new Function("console", code)(mockConsole)
           if (result !== undefined) {
             logs.push(String(result))
           }
         } catch (error) {
           logs.push(`Error: ${error}`)
-        } finally {
-          console.log = originalLog
         }
 
-        setOutput(logs.join("\n") || "Code executed successfully!")
+        setOutput(logs.join("\n") || "Code executed (no output)")
       } else {
         setOutput("Code execution is only supported for JavaScript in this demo.")
       }
@@ -100,12 +110,37 @@ export function CodeEditor({
       {/* Editor Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">
-            {language}
-          </Badge>
-          <Badge variant="outline" className="text-xs">
-            {theme} theme
-          </Badge>
+          <div className="relative" ref={langRef}>
+            <button
+              onClick={() => setLangOpen(!langOpen)}
+              className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-transparent px-2 py-0.5 text-xs font-medium hover:bg-gray-100 transition-colors"
+            >
+              {currentLanguage}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+            {langOpen && (
+              <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[100px]">
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang}
+                    onClick={() => { setCurrentLanguage(lang); setLangOpen(false) }}
+                    className={`block w-full text-left px-3 py-1.5 text-xs hover:bg-gray-100 transition-colors ${
+                      currentLanguage === lang ? "bg-blue-50 font-semibold" : ""
+                    }`}
+                  >
+                    {lang}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setCurrentTheme(currentTheme === "dark" ? "light" : "dark")}
+            className="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-transparent px-2 py-0.5 text-xs font-medium hover:bg-gray-100 transition-colors"
+          >
+            {currentTheme === "dark" ? <Moon className="h-3 w-3" /> : <Sun className="h-3 w-3" />}
+            {currentTheme} theme
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleCopy} className="text-xs bg-transparent">
@@ -133,19 +168,18 @@ export function CodeEditor({
       </div>
 
       {/* Code Editor */}
-      <Card className="flex-1 overflow-hidden">
-        <CardContent className="p-0 h-full">
+      <Card className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <CardContent className="p-0 flex-1 min-h-0">
           <textarea
             value={code}
             onChange={(e) => handleCodeChange(e.target.value)}
             readOnly={readOnly}
             className={`w-full h-full p-4 font-mono text-sm resize-none border-none outline-none ${
-              theme === "dark" ? "bg-gray-900 text-green-400" : "bg-gray-50 text-gray-800"
+              currentTheme === "dark" ? "bg-gray-900 text-green-400" : "bg-gray-50 text-gray-800"
             }`}
             placeholder="// Start coding here..."
             spellCheck={false}
             style={{
-              minHeight: "300px",
               fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
               lineHeight: "1.5",
               tabSize: 2,
@@ -166,7 +200,7 @@ export function CodeEditor({
           <CardContent>
             <pre
               className={`text-sm p-3 rounded-md overflow-x-auto ${
-                theme === "dark" ? "bg-gray-900 text-green-400" : "bg-gray-100 text-gray-800"
+                currentTheme === "dark" ? "bg-gray-900 text-green-400" : "bg-gray-100 text-gray-800"
               }`}
             >
               {output}

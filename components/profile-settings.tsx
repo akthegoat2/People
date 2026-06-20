@@ -1,13 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { X, UserIcon, Mail, BookOpen, Award, Calendar, Edit } from "lucide-react"
+import { X, UserIcon, Mail, BookOpen, Award, Calendar, Edit, Camera } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 import { createClient } from "@/lib/supabase"
-import { profileService, type UserProfile } from "@/lib/profile-service"
+import { type UserProfile } from "@/lib/profile-service"
 import type { User } from "@supabase/supabase-js"
 
 interface ProfileSettingsProps {
@@ -16,39 +17,61 @@ interface ProfileSettingsProps {
 }
 
 export function ProfileSettings({ user, onClose }: ProfileSettingsProps) {
+  const { profile: contextProfile, updateProfile } = useAuth()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [formData, setFormData] = useState({
     full_name: "",
     course: "",
   })
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const userProfile = await profileService.getProfile(user.id)
-        if (userProfile) {
-          setProfile(userProfile)
-          setFormData({
-            full_name: userProfile.full_name || "",
-            course: userProfile.course || "",
-          })
-        }
-      } catch (error) {
-        console.error("Error fetching profile:", error)
-      } finally {
-        setLoading(false)
-      }
+    if (contextProfile) {
+      setProfile(contextProfile)
+      setFormData({
+        full_name: contextProfile.full_name || "",
+        course: contextProfile.course || "",
+      })
+      setLoading(false)
+    } else {
+      setLoading(false)
     }
+  }, [contextProfile])
 
-    fetchProfile()
-  }, [user.id])
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    try {
+      const fileExt = file.name.split(".").pop()
+      const filePath = `${user.id}/profile.${fileExt}`
+
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("avatars")
+        .getPublicUrl(filePath)
+
+      await updateProfile({ avatar_url: publicUrl })
+    } catch (error) {
+      console.error("Error uploading avatar:", error)
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const handleSave = async () => {
     try {
-      const success = await profileService.updateProfile(user.id, formData)
+      const success = await updateProfile(formData)
       if (success) {
         setProfile((prev) => (prev ? { ...prev, ...formData } : null))
         setIsEditing(false)
@@ -81,19 +104,36 @@ export function ProfileSettings({ user, onClose }: ProfileSettingsProps) {
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <CardTitle className="text-xl font-bold">Profile Settings</CardTitle>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
             <X className="h-4 w-4" />
           </Button>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Profile Header */}
           <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
-            <Avatar className="h-16 w-16 ring-4 ring-blue-200">
-              <AvatarImage src={user.user_metadata?.avatar_url || "/placeholder.svg"} />
-              <AvatarFallback className="bg-gradient-to-r from-blue-400 to-purple-500 text-white font-bold text-xl">
-                {(profile?.full_name || user.email || "U").charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-16 w-16 ring-4 ring-blue-200">
+                <AvatarImage src={profile?.avatar_url || user.user_metadata?.avatar_url || "/placeholder.svg"} />
+                <AvatarFallback className="bg-gradient-to-r from-blue-400 to-purple-500 text-white font-bold text-xl">
+                  {(profile?.full_name || user.email || "U").charAt(0).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="absolute -bottom-1 -right-1 bg-blue-600 text-white rounded-full p-1.5 shadow-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                aria-label="Upload avatar"
+              >
+                <Camera className="h-3.5 w-3.5" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
+              />
+            </div>
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-gray-900">{profile?.full_name || "User"}</h3>
               <p className="text-sm text-gray-600">{user.email}</p>
@@ -153,10 +193,10 @@ export function ProfileSettings({ user, onClose }: ProfileSettingsProps) {
                     className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Select your course</option>
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="Software Engineering">Software Engineering</option>
-                    <option value="Information Technology">Information Technology</option>
-                    <option value="Cybersecurity">Cybersecurity</option>
+                    <option value="Full Stack Development Bootcamp - Cohort 2024A">Full Stack Development Bootcamp - Cohort 2024A</option>
+                    <option value="Full Stack Development Bootcamp - Cohort 2024B">Full Stack Development Bootcamp - Cohort 2024B</option>
+                    <option value="Full Stack Development Bootcamp - Cohort 2025A">Full Stack Development Bootcamp - Cohort 2025A</option>
+                    <option value="Web Development Certificate Program">Web Development Certificate Program</option>
                   </select>
                 ) : (
                   <p className="p-2 bg-gray-50 rounded-md">{profile?.course || "Not set"}</p>

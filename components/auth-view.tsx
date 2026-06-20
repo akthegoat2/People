@@ -99,28 +99,6 @@ export function AuthView() {
     if (error) {
       setMessage({ type: "error", text: error.message })
     } else if (data.user) {
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        full_name: signupData.fullName,
-        course: signupData.course,
-        xp: 0,
-        level: 1,
-        streak: 1,
-        last_activity: new Date().toISOString().split("T")[0],
-        badges: [],
-        completed_lessons: 0,
-        completed_quizzes: 0,
-        total_study_hours: 0,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-
-      if (profileError) {
-        console.error("🔴 Profile Insert Error:", profileError.message)
-        setMessage({ type: "error", text: `Profile save failed: ${profileError.message}` })
-        return
-      }
-
       setMessage({
         type: "success",
         text: data.user.email_confirmed_at
@@ -128,7 +106,6 @@ export function AuthView() {
           : "Account created! Please check your email to verify your account before signing in.",
       })
 
-      // Clear form
       setSignupData({ email: "", password: "", confirmPassword: "", fullName: "", course: "" })
     }
   } catch (error) {
@@ -162,11 +139,6 @@ export function AuthView() {
     "Full Stack Development Bootcamp - Cohort 2024A",
     "Full Stack Development Bootcamp - Cohort 2024B",
     "Full Stack Development Bootcamp - Cohort 2025A",
-    "Computer Science - Year 1 (Regular Program)",
-    "Computer Science - Year 2 (Regular Program)",
-    "Computer Science - Year 3 (Regular Program)",
-    "Computer Science - Year 4 (Regular Program)",
-    "Software Engineering Diploma",
     "Web Development Certificate Program",
   ]
 
@@ -235,6 +207,7 @@ export function AuthView() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
                         className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -365,6 +338,7 @@ export function AuthView() {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
                         className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

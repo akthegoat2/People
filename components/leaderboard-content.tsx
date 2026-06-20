@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Trophy, Medal, Award, Zap, Target, TrendingUp, Users, Star } from "lucide-react"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/contexts/auth-context"
 import { learningService } from "@/lib/learning-service"
 
 interface LeaderboardUser {
@@ -28,22 +29,18 @@ export function LeaderboardContent() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([])
   const [currentUser, setCurrentUser] = useState<LeaderboardUser | null>(null)
   const [loading, setLoading] = useState(true)
-  const [timeframe, setTimeframe] = useState<"all-time" | "weekly">("all-time")
   const [stats, setStats] = useState({
     totalUsers: 0,
     averageXP: 0,
     topStreak: 0,
     totalLessons: 0,
   })
+  const { user } = useAuth()
   const supabase = createClient()
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-
         // Get leaderboard data
         const leaderboardData = await learningService.getLeaderboard(50)
         setLeaderboard(leaderboardData)
@@ -105,7 +102,7 @@ export function LeaderboardContent() {
     }
 
     fetchLeaderboard()
-  }, [timeframe])
+  }, [user])
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -229,7 +226,7 @@ export function LeaderboardContent() {
                 </Avatar>
                 <div>
                   <div className="font-semibold text-gray-900">{currentUser.full_name || "You"}</div>
-                  <div className="text-sm text-gray-600">{currentUser.course || "Computer Science"}</div>
+                  <div className="text-sm text-muted-foreground">{currentUser.course || "Full Stack Bootcamp"}</div>
                 </div>
               </div>
               <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
@@ -262,51 +259,51 @@ export function LeaderboardContent() {
             <CardTitle className="text-center text-yellow-800">🏆 Top Performers 🏆</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex justify-center items-end gap-8">
+            <div className="flex justify-center items-end gap-4 sm:gap-8">
               {/* 2nd Place */}
-              <div className="text-center">
-                <div className="bg-gradient-to-r from-gray-300 to-gray-500 w-20 h-16 rounded-t-lg flex items-center justify-center mb-4">
+              <div className="text-center flex-1 max-w-[140px] sm:max-w-none">
+                <div className="bg-gradient-to-r from-gray-300 to-gray-500 h-16 rounded-t-lg flex items-center justify-center mb-4">
                   <span className="text-white font-bold text-lg">2</span>
                 </div>
-                <Avatar className="h-16 w-16 mx-auto mb-2 ring-4 ring-gray-300">
+                <Avatar className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-2 ring-4 ring-gray-300">
                   <AvatarImage src={leaderboard[1]?.avatar_url || "/placeholder.svg"} />
-                  <AvatarFallback className="bg-gradient-to-r from-gray-400 to-gray-600 text-white font-bold text-lg">
+                  <AvatarFallback className="bg-gradient-to-r from-gray-400 to-gray-600 text-white font-bold sm:text-lg text-sm">
                     {leaderboard[1]?.initials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="font-semibold text-gray-900">{leaderboard[1]?.full_name || "Anonymous"}</div>
-                <div className="text-sm text-gray-600">{leaderboard[1]?.xp} XP</div>
+                <div className="font-semibold text-sidebar-foreground text-sm sm:text-base truncate">{leaderboard[1]?.full_name || "Anonymous"}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">{leaderboard[1]?.xp} XP</div>
               </div>
 
               {/* 1st Place */}
-              <div className="text-center">
-                <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 w-24 h-20 rounded-t-lg flex items-center justify-center mb-4">
-                  <Trophy className="h-8 w-8 text-white" />
+              <div className="text-center flex-1 max-w-[160px] sm:max-w-none">
+                <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 h-20 rounded-t-lg flex items-center justify-center mb-4">
+                  <Trophy className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
                 </div>
-                <Avatar className="h-20 w-20 mx-auto mb-2 ring-4 ring-yellow-400">
+                <Avatar className="h-14 w-14 sm:h-20 sm:w-20 mx-auto mb-2 ring-4 ring-yellow-400">
                   <AvatarImage src={leaderboard[0]?.avatar_url || "/placeholder.svg"} />
-                  <AvatarFallback className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold text-xl">
+                  <AvatarFallback className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold sm:text-xl text-base">
                     {leaderboard[0]?.initials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="font-bold text-gray-900 text-lg">{leaderboard[0]?.full_name || "Anonymous"}</div>
-                <div className="text-sm text-gray-600">{leaderboard[0]?.xp} XP</div>
-                <Badge className="bg-yellow-100 text-yellow-800 mt-1">👑 Champion</Badge>
+                <div className="font-bold text-sidebar-foreground sm:text-lg text-sm truncate">{leaderboard[0]?.full_name || "Anonymous"}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">{leaderboard[0]?.xp} XP</div>
+                <Badge className="bg-yellow-100 text-yellow-800 mt-1 text-xs">👑 Champion</Badge>
               </div>
 
               {/* 3rd Place */}
-              <div className="text-center">
-                <div className="bg-gradient-to-r from-amber-400 to-amber-600 w-20 h-12 rounded-t-lg flex items-center justify-center mb-4">
+              <div className="text-center flex-1 max-w-[140px] sm:max-w-none">
+                <div className="bg-gradient-to-r from-amber-400 to-amber-600 h-12 rounded-t-lg flex items-center justify-center mb-4">
                   <span className="text-white font-bold text-lg">3</span>
                 </div>
-                <Avatar className="h-16 w-16 mx-auto mb-2 ring-4 ring-amber-300">
+                <Avatar className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-2 ring-4 ring-amber-300">
                   <AvatarImage src={leaderboard[2]?.avatar_url || "/placeholder.svg"} />
-                  <AvatarFallback className="bg-gradient-to-r from-amber-400 to-amber-600 text-white font-bold text-lg">
+                  <AvatarFallback className="bg-gradient-to-r from-amber-400 to-amber-600 text-white font-bold sm:text-lg text-sm">
                     {leaderboard[2]?.initials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="font-semibold text-gray-900">{leaderboard[2]?.full_name || "Anonymous"}</div>
-                <div className="text-sm text-gray-600">{leaderboard[2]?.xp} XP</div>
+                <div className="font-semibold text-sidebar-foreground text-sm sm:text-base truncate">{leaderboard[2]?.full_name || "Anonymous"}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">{leaderboard[2]?.xp} XP</div>
               </div>
             </div>
           </CardContent>
@@ -348,7 +345,7 @@ export function LeaderboardContent() {
                       {user.full_name || "Anonymous"}
                       {currentUser?.id === user.id && <Badge variant="outline">You</Badge>}
                     </div>
-                    <div className="text-sm text-gray-600">{user.course || "Computer Science"}</div>
+                    <div className="text-sm text-muted-foreground">{user.course || "Full Stack Bootcamp"}</div>
                   </div>
                 </div>
 

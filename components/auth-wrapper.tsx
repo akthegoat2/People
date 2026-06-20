@@ -37,7 +37,7 @@ export function AuthWrapper({ children }: AuthWrapperProps) {
     })
 
     return () => subscription.unsubscribe()
-  }, [supabase.auth])
+  }, [])
 
   if (loading) {
     return (

@@ -8,7 +8,9 @@ import { Progress } from "@/components/ui/progress"
 import { CertificateViewer } from "@/components/certificate-viewer"
 import { Award, Download, Share2, CheckCircle, Lock, Calendar, User, BookOpen } from "lucide-react"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/contexts/auth-context"
 import { learningService } from "@/lib/learning-service"
+import { toast } from "@/hooks/use-toast"
 
 interface Certificate {
   id: string
@@ -22,7 +24,6 @@ interface Certificate {
   skills: string[]
   instructor: string
   institution: string
-  issued_at: string
   created_at: string
 }
 
@@ -53,143 +54,137 @@ export function CertificatesContent() {
     averageScore: 0,
     studyHours: 0,
   })
+  const { user } = useAuth()
   const supabase = createClient()
 
-  useEffect(() => {
-    const fetchCertificates = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
+  const fetchCertificates = async () => {
+    if (!user) return
+    try {
+      const { data: userCertificates } = await supabase
+        .from("certificates")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
 
-        if (user) {
-          // Get user's earned certificates
-          const { data: userCertificates } = await supabase
-            .from("certificates")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false })
+      setCertificates(userCertificates || [])
 
-          setCertificates(userCertificates || [])
+      const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
 
-          // Get user progress
-          const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+      const { data: quizAttempts } = await supabase.from("quiz_attempts").select("*").eq("user_id", user.id)
 
-          const { data: quizAttempts } = await supabase.from("quiz_attempts").select("*").eq("user_id", user.id)
+      if (profile) {
+        const averageScore =
+          quizAttempts && quizAttempts.length > 0
+            ? Math.round(
+                quizAttempts.reduce((sum: number, attempt: any) => sum + attempt.percentage, 0) /
+                  quizAttempts.length,
+              )
+            : 0
 
-          if (profile) {
-            const averageScore =
-              quizAttempts && quizAttempts.length > 0
-                ? Math.round(
-                    quizAttempts.reduce((sum: number, attempt: any) => sum + attempt.percentage, 0) /
-                      quizAttempts.length,
-                  )
-                : 0
+        setUserProgress({
+          totalLessons: profile.completed_lessons || 0,
+          totalQuizzes: profile.completed_quizzes || 0,
+          averageScore,
+          studyHours: profile.total_study_hours || 0,
+        })
 
-            setUserProgress({
-              totalLessons: profile.completed_lessons || 0,
-              totalQuizzes: profile.completed_quizzes || 0,
+        const totalLessons = 52 // Total lessons across 12 modules
+        const totalQuizzes = 18 // Total quizzes available
+
+        const certificateRequirements: CertificateRequirement[] = [
+          {
+            id: "web-fundamentals",
+            title: "Web Development Fundamentals",
+            description: "Master the basics of web development, HTML, CSS, and JavaScript",
+            requiredLessons: 5,
+            requiredQuizzes: 2,
+            minimumScore: 70,
+            skills: ["HTML5", "CSS3", "JavaScript", "Web Standards"],
+            available: true,
+            progress: {
+              lessons: profile.completed_lessons || 0,
+              quizzes: profile.completed_quizzes || 0,
               averageScore,
-              studyHours: profile.total_study_hours || 0,
-            })
+            },
+          },
+          {
+            id: "frontend-developer",
+            title: "Frontend Developer",
+            description: "Master HTML, CSS, JavaScript, DOM, and React for modern frontend development",
+            requiredLessons: 20,
+            requiredQuizzes: 8,
+            minimumScore: 75,
+            skills: ["HTML5/CSS3", "JavaScript ES6+", "DOM API", "React", "Responsive Design"],
+            available: profile.completed_lessons >= 5,
+            progress: {
+              lessons: profile.completed_lessons || 0,
+              quizzes: profile.completed_quizzes || 0,
+              averageScore,
+            },
+          },
+          {
+            id: "backend-developer",
+            title: "Backend Developer",
+            description: "Build server-side applications with Node.js, Express, and databases",
+            requiredLessons: 35,
+            requiredQuizzes: 12,
+            minimumScore: 80,
+            skills: ["Node.js", "Express", "REST APIs", "PostgreSQL", "Authentication"],
+            available: profile.completed_lessons >= 20,
+            progress: {
+              lessons: profile.completed_lessons || 0,
+              quizzes: profile.completed_quizzes || 0,
+              averageScore,
+            },
+          },
+          {
+            id: "fullstack-developer",
+            title: "Full Stack Developer",
+            description: "Complete full-stack development — frontend, backend, databases, and deployment",
+            requiredLessons: 45,
+            requiredQuizzes: 15,
+            minimumScore: 85,
+            skills: [
+              "Frontend Development",
+              "Backend Development",
+              "Database Design",
+              "API Development",
+              "DevOps & Deployment",
+            ],
+            available: profile.completed_lessons >= 35,
+            progress: {
+              lessons: profile.completed_lessons || 0,
+              quizzes: profile.completed_quizzes || 0,
+              averageScore,
+            },
+          },
+        ]
 
-            // Define available certificates with requirements
-            const certificateRequirements: CertificateRequirement[] = [
-              {
-                id: "web-fundamentals",
-                title: "Web Development Fundamentals",
-                description: "Master the basics of web development, HTML, CSS, and JavaScript",
-                requiredLessons: 5,
-                requiredQuizzes: 2,
-                minimumScore: 70,
-                skills: ["HTML5", "CSS3", "JavaScript", "Web Standards"],
-                available: true,
-                progress: {
-                  lessons: profile.completed_lessons || 0,
-                  quizzes: profile.completed_quizzes || 0,
-                  averageScore,
-                },
-              },
-              {
-                id: "javascript-mastery",
-                title: "JavaScript Programming",
-                description: "Advanced JavaScript concepts, ES6+, and modern development practices",
-                requiredLessons: 8,
-                requiredQuizzes: 4,
-                minimumScore: 75,
-                skills: ["JavaScript ES6+", "Async Programming", "DOM Manipulation", "APIs"],
-                available: true,
-                progress: {
-                  lessons: profile.completed_lessons || 0,
-                  quizzes: profile.completed_quizzes || 0,
-                  averageScore,
-                },
-              },
-              {
-                id: "react-developer",
-                title: "React Developer",
-                description: "Build modern web applications with React and related technologies",
-                requiredLessons: 12,
-                requiredQuizzes: 6,
-                minimumScore: 80,
-                skills: ["React", "JSX", "Hooks", "State Management", "Component Architecture"],
-                available: profile.completed_lessons >= 5, // Unlock after completing fundamentals
-                progress: {
-                  lessons: profile.completed_lessons || 0,
-                  quizzes: profile.completed_quizzes || 0,
-                  averageScore,
-                },
-              },
-              {
-                id: "fullstack-developer",
-                title: "Full Stack Developer",
-                description: "Complete full-stack development with frontend and backend technologies",
-                requiredLessons: 20,
-                requiredQuizzes: 10,
-                minimumScore: 85,
-                skills: [
-                  "Frontend Development",
-                  "Backend Development",
-                  "Database Design",
-                  "API Development",
-                  "Deployment",
-                ],
-                available: profile.completed_lessons >= 10, // Unlock after significant progress
-                progress: {
-                  lessons: profile.completed_lessons || 0,
-                  quizzes: profile.completed_quizzes || 0,
-                  averageScore,
-                },
-              },
-            ]
-
-            setAvailableCertificates(certificateRequirements)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching certificates:", error)
-      } finally {
-        setLoading(false)
+        setAvailableCertificates(certificateRequirements)
       }
+    } catch (error) {
+      console.error("Error fetching certificates:", error)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    fetchCertificates()
-  }, [])
+  useEffect(() => {
+    if (user) fetchCertificates()
+  }, [user])
 
   const handleGenerateCertificate = async (courseId: string) => {
+    if (!user) return
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (user) {
-        const success = await learningService.generateCertificate(user.id, courseId)
-        if (success) {
-          // Refresh certificates
-          window.location.reload()
-        } else {
-          alert("You don't meet the requirements for this certificate yet. Keep learning!")
-        }
+      const success = await learningService.generateCertificate(user.id, courseId)
+      if (success) {
+        fetchCertificates()
+      } else {
+          toast({
+            title: "Requirements not met",
+            description: "You don't meet the requirements for this certificate yet. Keep learning!",
+            variant: "destructive",
+          })
       }
     } catch (error) {
       console.error("Error generating certificate:", error)
@@ -331,7 +326,7 @@ export function CertificatesContent() {
                   </div>
 
                   <div className="text-xs text-gray-600">
-                    Issued: {new Date(certificate.issued_at).toLocaleDateString()}
+                    Issued: {new Date(certificate.created_at).toLocaleDateString()}
                   </div>
 
                   <div className="flex gap-2">
@@ -343,11 +338,29 @@ export function CertificatesContent() {
                       <Award className="h-4 w-4 mr-1" />
                       View
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        window.print()
+                        toast({ title: "Print dialog opened", description: "Save as PDF from the print dialog." })
+                      }}
+                    >
                       <Download className="h-4 w-4 mr-1" />
                       Download
                     </Button>
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        if (navigator.share) {
+                          await navigator.share({ title: certificate.certificate_number, url: window.location.href })
+                        } else {
+                          await navigator.clipboard.writeText(window.location.href)
+                          toast({ title: "Link copied!", description: "Certificate link copied to clipboard." })
+                        }
+                      }}
+                    >
                       <Share2 className="h-4 w-4" />
                     </Button>
                   </div>

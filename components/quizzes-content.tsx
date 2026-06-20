@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { QuizViewer } from "@/components/quiz-viewer"
 import { Clock, Trophy, Star, Lock, CheckCircle, Play, Target } from "lucide-react"
-import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/contexts/auth-context"
 import { learningService, type Quiz } from "@/lib/learning-service"
 
 export function QuizzesContent() {
@@ -20,41 +20,35 @@ export function QuizzesContent() {
     averageScore: 0,
     totalXP: 0,
   })
-  const supabase = createClient()
+  const { user } = useAuth()
+
+  const fetchQuizzes = async () => {
+    if (!user) return
+    try {
+      const quizzesData = await learningService.getQuizzes(user.id)
+      setQuizzes(quizzesData)
+
+      const completed = quizzesData.filter((q) => q.completed)
+      const totalScore = completed.reduce((sum, q) => sum + (q.score || 0), 0)
+      const averageScore = completed.length > 0 ? Math.round(totalScore / completed.length) : 0
+      const totalXP = completed.reduce((sum, q) => sum + Math.round(((q.score || 0) / 100) * q.xpReward), 0)
+
+      setUserStats({
+        totalQuizzes: quizzesData.length,
+        completedQuizzes: completed.length,
+        averageScore,
+        totalXP,
+      })
+    } catch (error) {
+      console.error("Error fetching quizzes:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchQuizzes = async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-
-        if (user) {
-          const quizzesData = await learningService.getQuizzes(user.id)
-          setQuizzes(quizzesData)
-
-          // Calculate user stats
-          const completed = quizzesData.filter((q) => q.completed)
-          const totalScore = completed.reduce((sum, q) => sum + (q.score || 0), 0)
-          const averageScore = completed.length > 0 ? Math.round(totalScore / completed.length) : 0
-          const totalXP = completed.reduce((sum, q) => sum + Math.round(((q.score || 0) / 100) * q.xpReward), 0)
-
-          setUserStats({
-            totalQuizzes: quizzesData.length,
-            completedQuizzes: completed.length,
-            averageScore,
-            totalXP,
-          })
-        }
-      } catch (error) {
-        console.error("Error fetching quizzes:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchQuizzes()
-  }, [])
+    if (user) fetchQuizzes()
+  }, [user])
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -97,8 +91,7 @@ export function QuizzesContent() {
         onBack={() => setSelectedQuiz(null)}
         onComplete={() => {
           setSelectedQuiz(null)
-          // Refresh quizzes to update completion status
-          window.location.reload()
+          fetchQuizzes()
         }}
       />
     )

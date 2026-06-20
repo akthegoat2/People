@@ -5,6 +5,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Download, Share2, Award, Calendar, BookOpen } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
+import { toast } from "@/hooks/use-toast"
 
 interface Certificate {
   id: string
@@ -17,7 +19,7 @@ interface Certificate {
   skills: string[]
   instructor: string
   institution: string
-  issued_at: string
+  created_at: string
 }
 
 interface CertificateViewerProps {
@@ -29,6 +31,8 @@ interface CertificateViewerProps {
 
 export function CertificateViewer({ certificate, onBack, onDownload, onShare }: CertificateViewerProps) {
   const [isDownloading, setIsDownloading] = useState(false)
+  const { user } = useAuth()
+  const userName = user?.user_metadata?.full_name || "Student"
 
   const handleDownload = async () => {
     setIsDownloading(true)
@@ -54,7 +58,10 @@ export function CertificateViewer({ certificate, onBack, onDownload, onShare }: 
     } else {
       // Fallback to copying link
       navigator.clipboard.writeText(window.location.href)
-      alert("Certificate link copied to clipboard!")
+      toast({
+        title: "Link copied",
+        description: "Certificate link copied to clipboard!",
+      })
     }
     onShare?.()
   }
@@ -107,7 +114,7 @@ export function CertificateViewer({ certificate, onBack, onDownload, onShare }: 
           {/* Student Name */}
           <div className="text-center mb-8">
             <div className="border-b-2 border-gray-300 pb-2 mb-4 max-w-md mx-auto">
-              <p className="text-2xl font-bold text-gray-800">Student Name</p>
+              <p className="text-2xl font-bold text-gray-800">{userName}</p>
             </div>
             <p className="text-lg text-gray-600">has successfully completed the course</p>
           </div>
@@ -169,7 +176,7 @@ export function CertificateViewer({ certificate, onBack, onDownload, onShare }: 
 
             <div className="text-center">
               <div className="border-t-2 border-gray-400 pt-2 mb-2 w-48">
-                <p className="font-semibold text-gray-800">{new Date(certificate.issued_at).toLocaleDateString()}</p>
+                <p className="font-semibold text-gray-800">{new Date(certificate.created_at).toLocaleDateString()}</p>
               </div>
               <p className="text-sm text-gray-600">Date of Issue</p>
             </div>
@@ -217,7 +224,7 @@ export function CertificateViewer({ certificate, onBack, onDownload, onShare }: 
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Issue Date:</span>
-                  <span className="font-medium">{new Date(certificate.issued_at).toLocaleDateString()}</span>
+                  <span className="font-medium">{new Date(certificate.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Status:</span>

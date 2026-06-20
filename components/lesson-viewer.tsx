@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CodeEditor } from "@/components/code-editor"
 import { ArrowLeft, CheckCircle, Lightbulb, Code, BookOpen, Terminal, Trophy } from "lucide-react"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/contexts/auth-context"
 import { learningService, type Lesson, type Module } from "@/lib/learning-service"
 
 interface LessonViewerProps {
@@ -27,33 +28,29 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
   const [startTime] = useState(Date.now())
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+  const { user, refreshProfile } = useAuth()
 
   useEffect(() => {
+    if (!user) return
     const fetchLesson = async () => {
       try {
-        const moduleData = learningService.getModule(moduleId)
-        const lessonData = learningService.getLesson(moduleId, lessonId)
+        const moduleData = await learningService.getModule(moduleId)
+        const lessonData = await learningService.getLesson(moduleId, lessonId)
 
         setModule(moduleData)
         setLesson(lessonData)
 
         // Check if lesson is already completed
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
+        const { data: progress } = await supabase
+          .from("lesson_progress")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("module_id", moduleId)
+          .eq("lesson_id", lessonId)
+          .single()
 
-        if (user) {
-          const { data: progress } = await supabase
-            .from("lesson_progress")
-            .select("*")
-            .eq("user_id", user.id)
-            .eq("module_id", moduleId)
-            .eq("lesson_id", lessonId)
-            .single()
-
-          if (progress?.completed) {
-            setCompleted(true)
-          }
+        if (progress?.completed) {
+          setCompleted(true)
         }
       } catch (error) {
         console.error("Error fetching lesson:", error)
@@ -70,14 +67,10 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
     }, 60000)
 
     return () => clearInterval(interval)
-  }, [moduleId, lessonId])
+  }, [moduleId, lessonId, user])
 
   const handleCompleteLesson = async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
       if (user && lesson) {
         const finalTimeSpent = Math.floor((Date.now() - startTime) / 1000 / 60)
 
@@ -92,6 +85,7 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
 
         if (success) {
           setCompleted(true)
+          await refreshProfile()
 
           // Award badges based on progress
           await learningService.awardBadge(user.id, "First Lesson")
@@ -158,18 +152,18 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" onClick={onBack} className="hover:bg-gray-100">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          <Button variant="ghost" onClick={onBack} className="hover:bg-gray-100 shrink-0">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Modules
+            Back
           </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{lesson.title}</h1>
-            <p className="text-gray-600">{module.title}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">{lesson.title}</h1>
+            <p className="text-sm text-gray-600">{module.title}</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge className="bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 border-orange-200">
             <span className="mr-1">⭐</span>
             {lesson.xpReward} XP
@@ -205,8 +199,8 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Content Panel */}
-        <Card className="lg:h-[700px] overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 border-b">
+        <Card className="min-h-[400px] lg:max-h-[calc(100vh-12rem)] flex flex-col">
+          <CardHeader className="bg-gradient-to-r from-blue-50 to-purple-50 border-b shrink-0">
             <div className="flex items-center gap-2">
               {getStepIcon(lesson.type)}
               <CardTitle className="text-lg">{lesson.title}</CardTitle>
@@ -215,7 +209,7 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="p-6 overflow-y-auto">
+          <CardContent className="p-6 flex-1 min-h-0 overflow-y-auto">
             <div className="space-y-6">
               <div className="prose prose-sm max-w-none">
                 {lesson.content.split("\n\n").map((paragraph, index) => (
@@ -266,8 +260,8 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
         </Card>
 
         {/* Code Editor Panel */}
-        <Card className="lg:h-[700px] overflow-hidden">
-          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b">
+        <Card className="min-h-[400px] lg:max-h-[calc(100vh-12rem)] flex flex-col">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b shrink-0">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="lesson">📖 Lesson</TabsTrigger>
@@ -275,9 +269,9 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
               </TabsList>
             </Tabs>
           </CardHeader>
-          <CardContent className="p-0 h-full">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-              <TabsContent value="lesson" className="p-6 h-full">
+          <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
+              <TabsContent value="lesson" className="p-6 flex-1 min-h-0 overflow-y-auto">
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-800">Lesson Summary</h3>
                   <div className="space-y-3">
@@ -346,12 +340,12 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
                 </div>
               </TabsContent>
 
-              <TabsContent value="editor" className="h-full p-0">
+              <TabsContent value="editor" className="flex-1 min-h-0 p-0">
                 <CodeEditor
                   initialCode={
                     lesson.starterCode || lesson.codeExample || "// Start coding here!\nconsole.log('Hello, World!');"
                   }
-                  language="javascript"
+                  language={lesson.language || "javascript"}
                   theme="dark"
                 />
               </TabsContent>
@@ -363,20 +357,18 @@ export function LessonViewer({ moduleId, lessonId, onBack }: LessonViewerProps) 
       {/* Navigation */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <Button variant="outline" onClick={onBack} className="flex items-center gap-2 bg-transparent">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <Button variant="outline" onClick={onBack} className="flex items-center gap-2 bg-transparent justify-center sm:justify-start">
               <ArrowLeft className="h-4 w-4" />
-              Back to Modules
+              <span className="sm:inline">Back to Modules</span>
             </Button>
 
-            <div className="text-center">
-              <p className="text-sm text-gray-600">{lesson.description}</p>
-            </div>
+            <p className="text-sm text-muted-foreground text-center hidden md:block">{lesson.description}</p>
 
             <Button
               onClick={handleCompleteLesson}
               disabled={completed}
-              className={`flex items-center gap-2 ${
+              className={`flex items-center gap-2 justify-center ${
                 completed
                   ? "bg-green-600 hover:bg-green-700"
                   : "bg-gradient-to-r from-green-500 to-blue-600 hover:from-green-600 hover:to-blue-700"

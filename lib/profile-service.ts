@@ -13,6 +13,7 @@ export interface UserProfile {
   completed_lessons: number
   completed_quizzes: number
   total_study_hours: number
+  role: string
   created_at: string
   updated_at: string
 }
@@ -42,7 +43,9 @@ export interface QuizAttempt {
 }
 
 class ProfileService {
-  private supabase = createClient()
+  private get supabase() {
+    return createClient()
+  }
 
   async getProfile(userId: string): Promise<UserProfile | null> {
     const { data, error } = await this.supabase.from("profiles").select("*").eq("id", userId).single()

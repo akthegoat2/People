@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Play, CheckCircle, Clock, Star, Trophy } from "lucide-react"
-import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/contexts/auth-context"
 import { learningService, type Module } from "@/lib/learning-service"
 
 interface ModulesContentProps {
@@ -17,31 +17,27 @@ export function ModulesContent({ onStartLesson }: ModulesContentProps) {
   const [modules, setModules] = useState<Module[]>([])
   const [userProgress, setUserProgress] = useState<any>({})
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const { user } = useAuth()
 
   useEffect(() => {
+    if (!user) return
     const fetchData = async () => {
       try {
         // Get modules
-        const moduleData = learningService.getModules()
+        const moduleData = await learningService.getModules()
         setModules(moduleData)
 
         // Get user progress
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-        if (user) {
-          const progress = await learningService.getUserProgress(user.id)
+        const progress = await learningService.getUserProgress(user.id)
 
-          // Create progress lookup
-          const progressLookup: any = {}
-          progress.lessons.forEach((lesson: any) => {
-            const key = `${lesson.module_id}-${lesson.lesson_id}`
-            progressLookup[key] = lesson
-          })
+        // Create progress lookup
+        const progressLookup: any = {}
+        progress.lessons.forEach((lesson: any) => {
+          const key = `${lesson.module_id}-${lesson.lesson_id}`
+          progressLookup[key] = lesson
+        })
 
-          setUserProgress(progressLookup)
-        }
+        setUserProgress(progressLookup)
       } catch (error) {
         console.error("Error fetching modules data:", error)
       } finally {
@@ -50,7 +46,7 @@ export function ModulesContent({ onStartLesson }: ModulesContentProps) {
     }
 
     fetchData()
-  }, [])
+  }, [user])
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {

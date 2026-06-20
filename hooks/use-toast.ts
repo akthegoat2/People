@@ -8,6 +8,7 @@ type ToastProps = {
   description?: string
   action?: React.ReactNode
   variant?: "default" | "destructive"
+  open?: boolean
 }
 
 type ToastActionElement = React.ReactElement

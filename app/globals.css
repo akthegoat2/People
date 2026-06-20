@@ -98,13 +98,25 @@
   border-radius: 3px;
 }
 
+.dark ::-webkit-scrollbar-track {
+  background: #1e1e2e;
+}
+
 ::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 3px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #444;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 /* Loading animations */
@@ -148,9 +160,19 @@
   border-color: #3b82f6;
 }
 
+.dark .quiz-option:hover {
+  background-color: #1e293b;
+  border-color: #60a5fa;
+}
+
 .quiz-option.selected {
   background-color: #dbeafe;
   border-color: #3b82f6;
+}
+
+.dark .quiz-option.selected {
+  background-color: #1e3a5f;
+  border-color: #60a5fa;
 }
 
 /* Leaderboard styles */

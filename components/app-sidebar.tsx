@@ -1,15 +1,10 @@
 "use client"
 
-import { Home, BookOpen, Trophy, Zap, Target, Award } from "lucide-react"
-import { useState, useEffect } from "react"
-import { createClient } from "@/lib/supabase"
+import { Zap, Moon, Sun } from "lucide-react"
+import { useState } from "react"
+import { useTheme } from "next-themes"
 import { ProfileSettings } from "@/components/profile-settings"
-import type { User } from "@supabase/supabase-js"
-// Remove this incorrect import:
-// import { profileService } from "@/services/profileService"
-
-// Replace with the correct import:
-import { profileService, type UserProfile } from "@/lib/profile-service"
+import { useAuth } from "@/contexts/auth-context"
 import {
   Sidebar,
   SidebarContent,
@@ -31,65 +26,25 @@ interface AppSidebarProps {
   onViewChange: (view: string) => void
 }
 
-const menuItems = [
-  {
-    title: "Dashboard",
-    icon: Home,
-    id: "dashboard",
-    emoji: "🏠",
-  },
-  {
-    title: "Modules",
-    icon: BookOpen,
-    id: "modules",
-    emoji: "📚",
-  },
-  {
-    title: "Quizzes",
-    icon: Target,
-    id: "quizzes",
-    emoji: "❓",
-  },
-  {
-    title: "Certificates",
-    icon: Award,
-    id: "certificates",
-    emoji: "🏆",
-  },
-  {
-    title: "Leaderboard",
-    icon: Trophy,
-    id: "leaderboard",
-    emoji: "🏆",
-  },
+const baseMenuItems = [
+  { title: "Dashboard", id: "dashboard", emoji: "🏠" },
+  { title: "Modules", id: "modules", emoji: "📚" },
+  { title: "Quizzes", id: "quizzes", emoji: "❓" },
+  { title: "Certificates", id: "certificates", emoji: "🏆" },
+  { title: "Leaderboard", id: "leaderboard", emoji: "🏆" },
 ]
 
 export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
-  const [user, setUser] = useState<User | null>(null)
-  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const { user, profile } = useAuth()
+  const { theme, setTheme } = useTheme()
   const [showProfileSettings, setShowProfileSettings] = useState(false)
-  const supabase = createClient()
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (user) {
-        setUser(user)
-
-        // Fetch full profile data
-        const userProfile = await profileService.getProfile(user.id)
-        if (userProfile) {
-          setProfile(userProfile)
-        }
-      }
-    }
-    fetchUserData()
-  }, [])
+  const menuItems = profile?.role === "admin"
+    ? [...baseMenuItems, { title: "Admin", id: "admin", emoji: "🛠️" }]
+    : baseMenuItems
 
   return (
-    <Sidebar className="border-r-0 bg-white/80 backdrop-blur-sm">
+    <Sidebar>
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-green-600 to-blue-600 text-white font-bold text-lg">
@@ -106,7 +61,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <SidebarGroupLabel className="text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider">
             Navigation
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -116,7 +71,7 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
                   <SidebarMenuButton
                     onClick={() => onViewChange(item.id)}
                     isActive={activeView === item.id}
-                    className="w-full justify-start gap-3 rounded-xl hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 data-[active=true]:bg-gradient-to-r data-[active=true]:from-blue-100 data-[active=true]:to-purple-100 data-[active=true]:text-blue-700"
+                    className="w-full justify-start gap-3 rounded-xl hover:bg-sidebar-accent data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground"
                   >
                     <span className="text-lg">{item.emoji}</span>
                     <span className="font-medium">{item.title}</span>
@@ -129,14 +84,17 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="p-4">
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* User Profile */}
           <div
             onClick={() => setShowProfileSettings(true)}
-            className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-green-50 to-blue-50 border border-green-100 cursor-pointer hover:from-green-100 hover:to-blue-100 transition-colors"
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setShowProfileSettings(true) }}
+            role="button"
+            tabIndex={0}
+            className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-green-500/10 to-blue-500/10 border border-green-500/20 cursor-pointer hover:from-green-500/20 hover:to-blue-500/20 transition-colors"
           >
-            <Avatar className="h-10 w-10 ring-2 ring-green-200">
-              <AvatarImage src={user?.user_metadata?.avatar_url || "/placeholder.svg"} />
+            <Avatar className="h-10 w-10 ring-2 ring-green-500/30">
+              <AvatarImage src={profile?.avatar_url || user?.user_metadata?.avatar_url || "/placeholder.svg"} />
               <AvatarFallback className="bg-gradient-to-r from-green-400 to-blue-500 text-white font-bold">
                 {user?.user_metadata?.full_name
                   ? user.user_metadata.full_name.charAt(0).toUpperCase()
@@ -144,38 +102,58 @@ export function AppSidebar({ activeView, onViewChange }: AppSidebarProps) {
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold text-sm text-gray-900">{user?.user_metadata?.full_name || "User"}</p>
-              <p className="text-xs text-gray-600">Computer Science - Year 1</p>
+              <p className="font-semibold text-sm text-sidebar-foreground">{user?.user_metadata?.full_name || "User"}</p>
+              <p className="text-xs text-muted-foreground">{profile?.course || "Full Stack Bootcamp"}</p>
             </div>
           </div>
 
           {/* XP Progress */}
-          <div className="space-y-2 p-3 rounded-xl bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-100">
+          <div className="space-y-2 p-3 rounded-xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1">
                 <Zap className="h-4 w-4 text-yellow-500" />
-                <span className="text-sm font-semibold text-gray-700">Level {profile?.level || 1}</span>
+                <span className="text-sm font-semibold text-sidebar-foreground">Level {profile?.level || 1}</span>
               </div>
-              <span className="text-sm font-bold text-orange-600">
+              <span className="text-sm font-bold text-orange-500">
                 {profile?.xp || 0} / {(profile?.level || 1) * 1000} XP
               </span>
             </div>
-            <Progress value={((profile?.xp || 0) % 1000) / 10} className="h-2 bg-yellow-100" />
-            <p className="text-xs text-gray-600">
+            <Progress value={((profile?.xp || 0) % 1000) / 10} className="h-2 bg-yellow-500/20" />
+            <p className="text-xs text-muted-foreground">
               {1000 - ((profile?.xp || 0) % 1000)} XP to level {(profile?.level || 1) + 1}! 🚀
             </p>
           </div>
 
           {/* Current Streak */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-red-50 to-pink-50 border border-red-100">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-red-500/10 to-pink-500/10 border border-red-500/20">
             <div className="flex items-center gap-2">
               <span className="text-lg">🔥</span>
-              <span className="text-sm font-semibold text-gray-700">Streak</span>
+              <span className="text-sm font-semibold text-sidebar-foreground">Streak</span>
             </div>
-            <Badge variant="secondary" className="bg-red-100 text-red-700 font-bold">
+            <Badge variant="secondary" className="bg-red-500/20 text-red-600 dark:text-red-400 font-bold">
               {profile?.streak || 0} days
             </Badge>
           </div>
+
+          {/* Dark Mode Toggle */}
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="flex items-center justify-between w-full p-3 rounded-xl bg-sidebar-accent hover:bg-sidebar-accent/80 transition-colors border border-sidebar-border"
+          >
+            <div className="flex items-center gap-2">
+              {theme === "dark" ? (
+                <Moon className="h-4 w-4 text-sidebar-foreground" />
+              ) : (
+                <Sun className="h-4 w-4 text-sidebar-foreground" />
+              )}
+              <span className="text-sm font-medium text-sidebar-foreground">
+                {theme === "dark" ? "Dark Mode" : "Light Mode"}
+              </span>
+            </div>
+            <div className={`w-10 h-5 rounded-full p-0.5 transition-colors ${theme === "dark" ? "bg-blue-600" : "bg-gray-300"}`}>
+              <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${theme === "dark" ? "translate-x-5" : "translate-x-0"}`} />
+            </div>
+          </button>
         </div>
       </SidebarFooter>
 

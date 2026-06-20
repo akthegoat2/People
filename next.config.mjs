@@ -3,9 +3,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+
   images: {
     domains: ['placeholder.svg'],
     remotePatterns: [
@@ -18,7 +16,7 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000'],
+      allowedOrigins: ['localhost:3000', '*.vercel.app'],
     },
   },
 }
