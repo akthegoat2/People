@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowser, isSupabaseConfigured, localStore } from "@/lib/people/supabase";
+import { isUuid } from "@/lib/people/utils";
 import { createPostAction, ensureSeeded, flamePostAction } from "@/lib/people/actions";
 import type { CommentRow, Post } from "@/lib/people/types";
 
@@ -66,6 +67,7 @@ export function useFeed(coreId: string | null, search: string) {
     } catch {
       const stored = localStore.readLS<Post[]>(localStore.LS_POSTS, DEMO_POSTS);
       setPosts(coreId ? stored.filter((p) => p.core_id === coreId) : stored);
+      setLive(false);
     } finally {
       setLoading(false);
     }
@@ -151,6 +153,7 @@ export function useFeed(coreId: string | null, search: string) {
       return next;
     });
     if (!isSupabaseConfigured()) return { ok: true, offline: true };
+    if (!isUuid(postId)) return { ok: true, offline: true };
     const res = await flamePostAction(postId, voterAlias);
     if (!res.ok && res.reason !== "already-flamed") {
       // rollback
@@ -162,13 +165,18 @@ export function useFeed(coreId: string | null, search: string) {
   return { posts: filtered, loading, live, refresh: fetchPosts, createPost, flame };
 }
 
-export function useComments(postId: string) {
+export function useComments(postId: string | null) {
   const [comments, setComments] = useState<CommentRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const fetchComments = useCallback(async () => {
+    if (!postId) {
+      setComments([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseConfigured() || !isUuid(postId)) {
       const all = localStore.readLS<CommentRow[]>(localStore.LS_COMMENTS, []);
       setComments(all.filter((c) => c.post_id === postId));
       setLoading(false);
@@ -191,7 +199,7 @@ export function useComments(postId: string) {
   }, [fetchComments]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+    if (!postId || !isSupabaseConfigured() || !isUuid(postId)) return;
     const sb = getSupabaseBrowser();
     if (!sb) return;
     const channel = sb
@@ -212,6 +220,7 @@ export function useComments(postId: string) {
 
   const addComment = useCallback(
     async (author_alias: string, content: string) => {
+      if (!postId) return { ok: false };
       const trimmed = content.trim().slice(0, 2000);
       if (!trimmed) return { ok: false };
       const temp: CommentRow = {
@@ -226,7 +235,7 @@ export function useComments(postId: string) {
         localStore.writeLS(localStore.LS_COMMENTS, [...all, temp].slice(-500));
         return [...prev, temp];
       });
-      if (!isSupabaseConfigured()) return { ok: true, offline: true };
+      if (!isSupabaseConfigured() || !isUuid(postId)) return { ok: true, offline: true };
       try {
         const sb = getSupabaseBrowser()!;
         const { data, error } = await sb

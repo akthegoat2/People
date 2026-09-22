@@ -23,7 +23,7 @@ export function PostCard({
   const [expanded, setExpanded] = useState(false);
   const [flamed, setFlamed] = useState(false);
   const core = cores.find((c) => c.id === post.core_id);
-  const { comments, addComment } = useComments(expanded ? post.id : "__closed__");
+  const { comments, addComment } = useComments(expanded ? post.id : null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
 

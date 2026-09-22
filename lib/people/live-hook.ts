@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseBrowser, isSupabaseConfigured, localStore } from "@/lib/people/supabase";
+import { isUuid } from "@/lib/people/utils";
 import type { LiveDiscussion, LiveMessage } from "@/lib/people/types";
 
 const DEMO_ROOMS: LiveDiscussion[] = [
@@ -125,7 +126,7 @@ export function useLiveMessages(discussionId: string) {
   }, [fetchMsgs]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured() || !isUuid(discussionId)) return;
     const sb = getSupabaseBrowser();
     if (!sb) return;
     const ch = sb
