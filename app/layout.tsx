@@ -1,52 +1,38 @@
-import type { Metadata, Viewport } from "next"
-import localFont from "next/font/local"
-import { ThemeProvider } from "@/components/theme-provider"
-import "./globals.css"
-
-const inter = localFont({
-  src: "../public/fonts/Inter-Regular.woff2",
-  display: "swap",
-})
+import type { Metadata, Viewport } from "next";
+import { PeopleProvider } from "@/contexts/people-context";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/sonner";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LASU Learn - Computer Science E-Learning Platform",
-  description: "Interactive learning platform for Computer Science students at Lagos State University",
-  keywords: [
-    "e-learning",
-    "computer science",
-    "LASU",
-    "education",
-    "programming",
-    "web development",
-  ],
-  authors: [{ name: "LASU Computer Science Department" }],
+  title: "People — for the people, by the people",
+  description:
+    "People is an open speech and community platform: 16 specialized Cores, pseudonymous profiles, live discussions, and glassmorphic realtime discourse.",
+  keywords: ["people", "open speech", "community", "cores", "live discussions", "pseudonymous"],
   openGraph: {
-    title: "LASU Learn - Computer Science E-Learning Platform",
-    description: "Interactive learning platform for Computer Science students at Lagos State University",
+    title: "People — for the people, by the people",
+    description: "Open speech & community platform with 16 specialized Cores.",
     type: "website",
-    locale: "en_US",
   },
-  twitter: {
-    card: "summary_large_image",
-    title: "LASU Learn - Computer Science E-Learning Platform",
-    description: "Interactive learning platform for Computer Science students at Lagos State University",
-  },
-}
+};
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-}
+  themeColor: "#0a0c10",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <html lang="en" className="dark" suppressHydrationWarning>
+      <body className="min-h-screen">
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+        <PeopleProvider>
           {children}
+          <Toaster richColors closeButton />
+        </PeopleProvider>
         </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }
-
