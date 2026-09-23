@@ -3,6 +3,7 @@
 import { Navbar } from "@/components/people/navbar";
 import { Sidebar } from "@/components/people/sidebar";
 import { BottomNav } from "@/components/people/bottom-nav";
+import { Footer } from "@/components/people/footer";
 import { Feed } from "@/components/people/feed";
 import { CoreIcon } from "@/components/people/core-icon";
 import { usePeople } from "@/contexts/people-context";
@@ -109,6 +110,7 @@ export default function HomePage() {
           </div>
         </aside>
       </div>
+      <Footer />
       <BottomNav />
     </div>
   );

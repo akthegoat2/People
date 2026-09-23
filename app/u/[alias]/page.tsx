@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { Navbar } from "@/components/people/navbar";
 import { Sidebar } from "@/components/people/sidebar";
 import { BottomNav } from "@/components/people/bottom-nav";
+import { Footer } from "@/components/people/footer";
 import { ProfileView, RotateAliasButton } from "@/components/people/profile-view";
 import { usePeople } from "@/contexts/people-context";
 
@@ -28,6 +29,7 @@ export default function UserPage() {
           <ProfileView alias={alias} />
         </main>
       </div>
+      <Footer />
       <BottomNav />
     </div>
   );

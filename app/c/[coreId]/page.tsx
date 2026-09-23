@@ -6,6 +6,7 @@ import { ArrowLeft, ScrollText } from "lucide-react";
 import { Navbar } from "@/components/people/navbar";
 import { Sidebar } from "@/components/people/sidebar";
 import { BottomNav } from "@/components/people/bottom-nav";
+import { Footer } from "@/components/people/footer";
 import { Feed } from "@/components/people/feed";
 import { LiveEngine } from "@/components/people/live-engine";
 import { CoreIcon } from "@/components/people/core-icon";
@@ -33,7 +34,8 @@ export default function CorePage() {
             <Link href="/" className="glass-btn mt-4 inline-block">Return to Stream</Link>
           </div>
         </div>
-        <BottomNav />
+      <Footer />
+      <BottomNav />
       </div>
     );
   }

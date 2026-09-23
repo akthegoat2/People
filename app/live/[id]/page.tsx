@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react";
 import { Navbar } from "@/components/people/navbar";
 import { Sidebar } from "@/components/people/sidebar";
 import { BottomNav } from "@/components/people/bottom-nav";
+import { Footer } from "@/components/people/footer";
 import { LiveRoom } from "@/components/people/live-room";
 import { getSupabaseBrowser, isSupabaseConfigured, localStore } from "@/lib/people/supabase";
 import type { LiveDiscussion } from "@/lib/people/types";
@@ -60,6 +61,7 @@ export default function LiveRoomPage() {
           )}
         </main>
       </div>
+      <Footer />
       <BottomNav />
     </div>
   );
